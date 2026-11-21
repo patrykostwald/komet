@@ -1,0 +1,19 @@
+{
+  "id": "./",
+  "name": "KOMET",
+  "short_name": "KOMET",
+  "description": "Komet: gra o zaufaniu. Szare kropki, żółte łowcy, pole bitów jako księga tego, kto wygrywa.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "landscape",
+  "background_color": "#07060b",
+  "theme_color": "#0a0b0f",
+  "lang": "pl",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -1,0 +1,39 @@
+# working notes (kept locally)
+CLAUDE.md
+KARTA-GRY.md
+
+# working copies and backups
+*.bak
+*.orig
+*.przed-*
+*.przed
+klient.przed-*
+index.przed-*
+silnik.przed-*
+
+# tooling, agent work folders, captures, video
+codex*/
+narzedzia/
+zrzuty/
+video/
+test/
+tests-tmp/
+
+# secrets and local config
+.env
+.env.*
+*.pem
+*.key
+*.vars
+panel-haslo*.txt
+ADRES-PODGLADU.txt
+*password*
+*secret*
+*token*
+
+# dependencies, build output, logs, OS files
+node_modules/
+dist/
+*.log
+.DS_Store
+Thumbs.db

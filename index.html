@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<title>Komet</title>
+<meta name="description" content="Komet: gra o zaufaniu. Szare kropki, żółte łowcy, pole bitów jako księga tego, kto wygrywa: budowanie czy pożeranie.">
+<meta name="theme-color" content="#0a0b0f">
+<link rel="manifest" href="manifest.json">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="KOMET">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --tlo: #0a0b0f; --mgla: #15171d; --szary: #9da3ac; --szary-jasny: #d6dae0; --tekst: #e8eaee; --tekst-2: #9da3ac; --tekst-3: #5e646d;
+    --zolty: #f2c230; --niebieski: #5b8cff; --czerwony: #ff5a5a;
+    --sans: "Geist", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+    --mono: "Geist Mono", "Cascadia Mono", ui-monospace, Consolas, monospace;
+    --gora: 60px; --dol: 64px; --bok: 20px;
+  }
+  @media (pointer: coarse) { :root { --dol: 212px; --bok: 16px; } } /* stopka mieści RUN nad CONNECT, komunikat nad przyciskami */
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--tlo); color: var(--tekst); font-family: var(--sans); overflow: hidden; overscroll-behavior: none; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+  body { height: 100dvh; }
+  #scena { position: fixed; inset: 0; display: block; width: 100%; height: 100%; }
+  /* stałe strefy: góra (HUD), środek (scena), dół (sterowanie); nic nie zmienia wymiarów w trakcie gry */
+  .strefa { position: fixed; left: 0; right: 0; z-index: 2; pointer-events: none; }
+  #gora { top: 0; height: calc(var(--gora) + env(safe-area-inset-top)); display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 0 var(--bok); padding-top: env(safe-area-inset-top); }
+  #dol { bottom: 0; height: var(--dol); padding: 0 var(--bok); padding-bottom: env(safe-area-inset-bottom); }
+  .marka { font-weight: 500; letter-spacing: .18em; text-transform: uppercase; font-size: 12px; color: var(--tekst-2); }
+  .marka b { color: var(--tekst); font-weight: 500; }
+  #srodek { display: grid; justify-items: center; gap: 5px; }
+  #swit { position: relative; width: 240px; height: 2px; border-radius: 1px; background: rgba(157,163,172,.16); } /* linia świtu: jasna część rośnie od środka ku celowi (bez cyfr; procent w podsumowaniu) */
+  #swit i { position: absolute; left: 50%; top: -1px; height: 4px; width: 0; transform: translateX(-50%); border-radius: 2px; transition: width .9s ease; }
+  #swit i.glowna { background: linear-gradient(90deg, rgba(107,152,255,.15), #d9b3ff 30%, #ffffff 50%, #d9b3ff 70%, rgba(255,106,90,.15)); box-shadow: 0 0 12px rgba(217,179,255,.55); }
+  #swit i.w1 { background: #3f5fd6; filter: blur(5px); opacity: .6; animation: dryf1 13s ease-in-out infinite; } /* warstwy jak w logo: błękit rozmyty, fiolet, karmin */
+  #swit i.w2 { background: #d9b3ff; filter: blur(2px); opacity: .5; translate: 0 3px; animation: dryf4 17s ease-in-out infinite; }
+  #swit i.w3 { background: #ff6a5a; opacity: .35; translate: 0 -3px; animation: dryf7 11s ease-in-out infinite; }
+  .marka.logo { display: flex; font: 400 13px/1 var(--sans); letter-spacing: .32em; text-transform: uppercase; padding-left: 0; margin: 0; } /* marka w grze: te same warstwy co logo, mała */
+  .marka.logo .ch i { opacity: 1; transform: none; filter: none; animation: none; }
+  #gora, #dol #pytajnik2 { opacity: 0; transition: opacity .8s ease; } body.gra #gora, body.gra #dol #pytajnik2 { opacity: 1; } /* HUD pojawia się dopiero w grze */
+  #dol #pytajnik2 { position: absolute; left: var(--bok); bottom: 14px; width: 44px; height: 44px; padding: 0; border: 0; background: none; color: var(--tekst-2); font: 200 22px/1 var(--sans); cursor: pointer; pointer-events: auto; } /* znak „?” w lewym dolnym rogu rozwija podpowiedzi klawiszy */
+  #dol #pytajnik2 span { display: block; background: linear-gradient(90deg, #ffffff, #bcd9ff, #ffffff, #9fc8ff, #ffffff); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; animation: mien 6s linear infinite; }
+  #podpowiedz { display: none; } #dol.pomoc #podpowiedz { display: block; left: calc(var(--bok) + 52px); }
+  #wynik { font-family: var(--mono); font-size: 16px; letter-spacing: .08em; color: var(--tekst-2); display: flex; gap: 8px; align-items: baseline; }
+  #wynik b { font-weight: 500; } #wN { color: var(--niebieski); } #wC { color: var(--czerwony); }
+  #pasek { display: grid; grid-template-columns: 14px 240px 14px; gap: 12px; align-items: center; font-family: var(--mono); font-size: 13px; color: var(--tekst-2); }
+  #pasek .tor { height: 6px; border-radius: 3px; background: rgba(157,163,172,.18); position: relative; overflow: hidden; }
+  #pasek .tor i { position: absolute; top: 0; bottom: 0; }
+  #pasek .jasne { left: 0; background: linear-gradient(90deg, #c9ced6, #ffffff); box-shadow: 0 0 10px rgba(244,246,249,.45); width: 0; transition: width .6s ease; }
+  #pasek .ciemne { right: 0; background: #000; box-shadow: 0 0 0 1px rgba(157,163,172,.35) inset; width: 0; transition: width .6s ease; }
+  #pasek .n1 { text-align: right; } #pasek .n0 { text-align: left; }
+  #prawy { display: flex; justify-content: flex-end; gap: 18px; font-family: var(--mono); font-size: 13px; color: var(--tekst-2); align-items: center; }
+  #zycia { display: flex; gap: 5px; align-items: center; min-width: 96px; justify-content: flex-end; }
+  #zycia i { width: 8px; height: 8px; border-radius: 50%; background: var(--szary-jasny); display: inline-block; }
+  #zycia i.puste { background: transparent; box-shadow: 0 0 0 1px rgba(157,163,172,.45) inset; }
+  #czas { min-width: 54px; text-align: right; color: var(--tekst); }
+  #sprintTor { width: 44px; height: 3px; border-radius: 2px; background: rgba(157,163,172,.18); overflow: hidden; opacity: 0; transition: opacity .4s; }
+  #sprintTor i { display: block; height: 100%; background: var(--szary-jasny); width: 100%; }
+  #epoka { position: fixed; top: calc(var(--gora) + 10px); left: 50%; transform: translateX(-50%); height: 22px; line-height: 22px; font-size: 13px; color: var(--tekst-2); letter-spacing: .04em; opacity: 0; transition: opacity .8s ease; z-index: 2; pointer-events: none; white-space: nowrap; }
+  #epoka.widac { opacity: 1; }
+  #komunikat { position: absolute; left: var(--bok); right: var(--bok); top: 0; height: 22px; line-height: 22px; text-align: center; font-size: 14px; color: var(--tekst-2); letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #komunikat.wazny { color: var(--tekst); }
+  #podpowiedz { position: absolute; left: var(--bok); right: var(--bok); bottom: 18px; height: 22px; line-height: 22px; text-align: center; font-size: 15px; color: #c5cad2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #podpowiedz kbd { font-family: var(--mono); font-size: 13px; color: var(--tekst); border: 1px solid rgba(255,255,255,.25); border-radius: 4px; padding: 1px 6px; margin: 0 1px; }
+  /* sterowanie dotykowe: tylko na urządzeniach z dotykiem */
+  #dotyk { display: none; position: absolute; inset: 0; pointer-events: none; }
+  @media (pointer: coarse) { #dotyk { display: block; } #podpowiedz { display: none; } #pasek { grid-template-columns: 12px 120px 12px; gap: 8px; } #zycia { min-width: 70px; } }
+  @media (max-width: 600px) { .marka { visibility: hidden; } #prawy { gap: 12px; } }
+  #strefa { position: fixed; left: 0; top: 56px; bottom: 0; width: 62%; pointer-events: auto; touch-action: none; z-index: 1; } /* strefa gałki: dotknij gdziekolwiek po lewej, gałka pojawia się pod kciukiem */
+  #galka { position: fixed; left: 0; top: 0; width: 140px; height: 140px; border-radius: 50%; border: 1px solid rgba(214,218,224,.4); background: rgba(21,23,29,.4); pointer-events: none; opacity: 0; transition: opacity .12s; }
+  #galka.widac { opacity: 1; }
+  #dol #pytajnik2 { z-index: 3; }
+  #galka i { position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%; background: rgba(157,163,172,.35); backdrop-filter: blur(6px); }
+  .przycisk { --p: 0; --kolor: #f4f6f9; position: absolute; width: 76px; height: 76px; border-radius: 50%; border: 1px solid rgba(157,163,172,.35); background: rgba(21,23,29,.7); color: var(--tekst); font: 500 12px/1.1 var(--sans); letter-spacing: .06em; text-transform: uppercase; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; text-align: center; pointer-events: auto; touch-action: none; }
+  .przycisk small { font-size: 9px; letter-spacing: .02em; text-transform: none; color: #a6adbb; }
+  .przycisk::before { content: ""; position: absolute; inset: -5px; border-radius: 50%; background: conic-gradient(var(--kolor) calc(var(--p) * 1turn), transparent 0); -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px)); mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px)); opacity: .9; pointer-events: none; }
+  .przycisk.aktywny { background: rgba(157,163,172,.35); }
+  .przycisk { width: 66px; height: 66px; font-size: 11px; }
+  /* mobilne kontrolery: proste i czytelne; gałka po lewej (krawędź = bieg), po prawej trzy okrągłe przyciski z podpisami */
+  .przycisk { width: 72px; height: 72px; font: 500 11px/1 var(--sans); letter-spacing: .14em; text-transform: uppercase; color: var(--tekst); border: 1px solid rgba(214,218,224,.45); background: rgba(21,23,29,.62); box-shadow: 0 6px 20px rgba(0,0,0,.35); }
+  .przycisk.aktywny { background: rgba(214,218,224,.9); color: var(--tlo); }
+  #bE { right: var(--bok); bottom: calc(26px + env(safe-area-inset-bottom)); width: 84px; height: 84px; }
+  #bSpacja { right: calc(var(--bok) + 96px); bottom: calc(26px + env(safe-area-inset-bottom)); }
+  #bShift { right: calc(var(--bok) + 10px); bottom: calc(126px + env(safe-area-inset-bottom)); width: 66px; height: 66px; }
+  #galka i { width: 52px; height: 52px; margin: -26px 0 0 -26px; background: rgba(214,218,224,.7); }
+  /* nakładki: start i podsumowanie */
+  .naklad { position: fixed; inset: 0; z-index: 3; display: flex; align-items: center; justify-content: center; padding: 24px var(--bok); background: rgba(10,11,15,.72); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); opacity: 0; pointer-events: none; transition: opacity .45s ease; }
+  .naklad.widac { opacity: 1; pointer-events: auto; }
+  /* ekran startu: bez boksu, fraktalne tło widać; logo z 8 warstw głębi (echa dryfują po elipsach i reagują na kursor), pod nim PLAY, niżej „?” rozsuwający klawisze i boty */
+  #start.naklad { background: radial-gradient(ellipse at center, rgba(10,11,15,.16), rgba(10,11,15,.6) 85%); backdrop-filter: none; -webkit-backdrop-filter: none; align-items: flex-start; overflow-y: auto; }
+  #start .wejscie { margin: auto 0; } /* wyśrodkowane, a gdy nauka rozwinięta i wyższa niż ekran: przewijanie */
+  .wejscie { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; gap: 0; width: 100%; max-width: 760px; }
+  .wejscie > * { opacity: 0; animation: wplyn 1.2s cubic-bezier(.2,.7,.2,1) forwards; animation-delay: calc(.4s + var(--i, 0) * .16s); }
+  .tytul { margin: 0 0 30px; padding-left: .3em; font: 200 clamp(56px, 11vw, 96px)/1 var(--sans); letter-spacing: .3em; color: var(--tekst); display: flex; justify-content: center; white-space: nowrap; }
+  .tytul .ch { display: inline-block; }
+  .tytul .ch i, .tytul .ch s, .tytul .ch u, .tytul .ch b { position: relative; display: inline-block; font-style: normal; font-weight: inherit; text-decoration: none; isolation: isolate; }
+  .tytul .ch i { opacity: 0; transform: translateY(.12em); filter: blur(4px); animation: wyplyn 2.2s cubic-bezier(.2,.7,.2,1) forwards; animation-delay: calc(.3s + var(--i) * .12s); }
+  .tytul .ch b { background: linear-gradient(176deg, #ffffff 30%, #cdd3e2 70%, #9a93c6 115%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent; }
+  .tytul .ch i::before, .tytul .ch i::after, .tytul .ch s::before, .tytul .ch s::after, .tytul .ch u::before, .tytul .ch u::after, .tytul .ch b::before, .tytul .ch b::after { content: attr(data-c); position: absolute; left: 0; top: 0; z-index: -1; pointer-events: none; }
+  /* osiem warstw od najdalszej: błękit rozmyty, indygo rozmyte, karmin rozmyty, fioletowe echo, żółta mgła, kontur szaroniebieski, kontur karminowy, kontur złoty */
+  .tytul .ch i::before { color: #3f5fd6; -webkit-text-fill-color: #3f5fd6; opacity: .5; filter: blur(6px); transform: translate(calc(.08em + var(--mx, 0) * 20px), calc(.09em + var(--my, 0) * 14px)); animation: dryf1 13s ease-in-out infinite; }
+  .tytul .ch i::after { color: #5b4fa0; -webkit-text-fill-color: #5b4fa0; opacity: .45; filter: blur(4px); transform: translate(calc(-.05em - var(--mx, 0) * 14px), calc(.06em + var(--my, 0) * 10px)); animation: dryf2 23s ease-in-out infinite; }
+  .tytul .ch s::before { color: #b03a4a; -webkit-text-fill-color: #b03a4a; opacity: .42; filter: blur(3px); transform: translate(calc(.05em + var(--mx, 0) * 11px), calc(-.035em - var(--my, 0) * 9px)); animation: dryf3 15s ease-in-out infinite; }
+  .tytul .ch s::after { color: #d9b3ff; -webkit-text-fill-color: #d9b3ff; opacity: .5; transform: translate(calc(.028em + var(--mx, 0) * 10px), calc(.034em + var(--my, 0) * 7px)); animation: dryf4 17s ease-in-out infinite; }
+  .tytul .ch u::before { color: #f7c43a; -webkit-text-fill-color: #f7c43a; opacity: .16; filter: blur(1px); transform: translate(calc(-.022em - var(--mx, 0) * 9px), calc(-.018em - var(--my, 0) * 6px)); animation: dryf5 21s ease-in-out infinite; }
+  .tytul .ch u::after { color: transparent; -webkit-text-fill-color: transparent; -webkit-text-stroke: .5px rgba(142,134,184,.75); transform: translate(calc(.014em + var(--mx, 0) * 7px), calc(-.012em - var(--my, 0) * 5px)); animation: dryf6 9s ease-in-out infinite; }
+  .tytul .ch b::before { color: transparent; -webkit-text-fill-color: transparent; -webkit-text-stroke: .8px rgba(255,106,90,.7); transform: translate(calc(-.016em - var(--mx, 0) * 8px), calc(-.018em - var(--my, 0) * 6px)); animation: dryf7 11s ease-in-out infinite; }
+  .tytul .ch b::after { color: transparent; -webkit-text-fill-color: transparent; -webkit-text-stroke: .6px rgba(247,196,58,.45); opacity: .8; transform: translate(calc(-.03em - var(--mx, 0) * 12px), calc(.02em - var(--my, 0) * 9px)); animation: dryf8 19s ease-in-out infinite; }
+  @keyframes wyplyn { to { opacity: 1; transform: none; filter: blur(0); } }
+  @keyframes dryf1 { 0%, 100% { translate: 0 0; opacity: .5; } 25% { translate: .03em -.02em; opacity: .36; } 50% { translate: .05em .03em; opacity: .58; } 75% { translate: -.02em .04em; opacity: .42; } }
+  @keyframes dryf2 { 0%, 100% { translate: 0 0; } 30% { translate: .035em .02em; } 60% { translate: -.03em .035em; } }
+  @keyframes dryf3 { 0%, 100% { translate: 0 0; } 35% { translate: -.03em .025em; } 70% { translate: .025em .04em; } }
+  @keyframes dryf4 { 0%, 100% { translate: 0 0; } 33% { translate: -.025em .02em; } 66% { translate: .02em -.03em; } }
+  @keyframes dryf5 { 0%, 100% { translate: 0 0; opacity: .16; } 50% { translate: .04em .03em; opacity: .26; } }
+  @keyframes dryf6 { 0%, 100% { translate: 0 0; } 50% { translate: .02em .018em; } }
+  @keyframes dryf7 { 0%, 100% { translate: 0 0; } 50% { translate: .03em .025em; } }
+  @keyframes dryf8 { 0%, 100% { translate: 0 0; } 40% { translate: -.03em -.02em; } 70% { translate: .015em .035em; } }
+  @keyframes wplyn { from { opacity: 0; transform: translateY(4px); filter: blur(3px); } to { opacity: 1; transform: none; filter: blur(0); } }
+  .szczegoly { display: grid; grid-template-rows: 0fr; opacity: 0; width: 100%; justify-items: center; transition: grid-template-rows .7s cubic-bezier(.2,.7,.2,1), opacity .5s ease; animation: none; }
+  .szczegoly > div { overflow: hidden; display: grid; justify-items: center; gap: 26px; min-height: 0; }
+  .wejscie.rozwiniety .szczegoly { grid-template-rows: 1fr; opacity: 1; }
+  .wejscie.rozwiniety .szczegoly > div { padding-bottom: 32px; }
+  .wejscie .klawisze { margin: 0; padding: 0; list-style: none; display: grid; gap: 11px; }
+  .nauka { display: grid; grid-template-columns: repeat(3, 200px); gap: 16px 26px; justify-content: center; }
+  .nauka .kafel { display: grid; gap: 8px; justify-items: center; align-content: start; }
+  .nauka .kafel.dzial { grid-column: 1; margin-top: 10px; } .nauka .kafel.dzial ~ .kafel { margin-top: 10px; }
+  .nauka canvas { width: 200px; height: 120px; display: block; }
+  .nauka .k { display: flex; gap: 6px; min-height: 26px; align-items: center; }
+  .nauka .k.wasd { display: grid; grid-template-columns: repeat(3, 28px); gap: 4px; } .nauka .k.wasd kbd:nth-child(1) { grid-column: 2; grid-row: 1; } .nauka .k.wasd kbd:nth-child(2) { grid-column: 1; grid-row: 2; } .nauka .k.wasd kbd:nth-child(3) { grid-column: 2; grid-row: 2; } .nauka .k.wasd kbd:nth-child(4) { grid-column: 3; grid-row: 2; } /* W nad S, A i D po bokach: podświetlenie zgadza się z ruchem */
+  .nauka kbd { font: 400 11px/1 var(--mono); color: var(--tekst-2); border: 1px solid rgba(255,255,255,.14); border-radius: 6px; padding: 6px 7px; min-width: 28px; text-align: center; background: rgba(21,23,29,.35); transition: background .15s, color .15s, box-shadow .15s; }
+  .nauka kbd.wcisniety { color: var(--tlo); background: rgba(214,218,224,.92); box-shadow: 0 0 16px rgba(188,217,255,.55); }
+  @media (pointer: coarse) { .nauka .tylko-klawiatura { display: none; } .nauka .kafel.laczenie { grid-column: 1 / -1; } .nauka .kafel.laczenie canvas { width: 200px; height: 120px; } body:not(.gra) #dotyk { display: none; } } /* dotyk: kafel łączenia na środku, gałka i przyciski dopiero w grze */
+  @media (max-width: 720px) { .nauka { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; width: 100%; } .nauka canvas { width: 100%; height: auto; aspect-ratio: 5 / 3; } .nauka .kafel.dzial { grid-column: 1; } }
+  .wejscie .etykieta.wilk { width: 12px; height: 12px; border-radius: 50%; background: radial-gradient(circle at 40% 40%, #ffd2c8, #ff5a5a 60%, #b03a4a); box-shadow: 0 0 12px rgba(255,90,90,.6); text-indent: 0; }
+  .wejscie .klawisze li { display: grid; grid-template-columns: 76px 1fr; gap: 16px; align-items: center; font: 300 14.5px/1.5 var(--sans); letter-spacing: .01em; color: var(--tekst-2); }
+  .wejscie .klawisze kbd { font: 400 12px/1 var(--mono); color: var(--tekst); border: 1px solid rgba(255,255,255,.16); border-radius: 6px; padding: 5px 8px; display: inline-block; text-align: center; background: rgba(21,23,29,.35); }
+  .wejscie .boty { display: flex; align-items: center; gap: 22px; font: 300 12px/1 var(--sans); letter-spacing: .32em; text-indent: .32em; text-transform: uppercase; color: var(--tekst-2); }
+  .wejscie .licznik { gap: 6px; }
+  .wejscie .licznik b { min-width: 40px; font: 300 24px/1 var(--mono); text-align: center; color: var(--tekst); }
+  .krok { width: 44px; height: 44px; padding: 0; border: 0; background: none; color: var(--tekst-2); font: 200 30px/1 var(--sans); cursor: pointer; touch-action: manipulation; transition: color .3s; }
+  .krok:hover, .krok:focus-visible { color: var(--tekst); outline: none; }
+  .krok:disabled { opacity: .25; cursor: default; }
+  .graj { min-height: 56px; padding: 8px 16px; border: 0; background: none; cursor: pointer; touch-action: manipulation; }
+  .graj span { display: block; font: 500 26px/1 var(--sans); letter-spacing: .5em; text-indent: .5em; text-transform: uppercase; background: linear-gradient(90deg, #b4bac8, #6b98ff, #d9b3ff, #f7c43a, #ff6a5a, #b03a4a, #8e86b8, #b4bac8, #6b98ff, #d9b3ff, #f7c43a, #ff6a5a, #b03a4a, #8e86b8, #b4bac8); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; animation: mien 5s linear infinite; filter: drop-shadow(0 0 18px rgba(107,152,255,.3)); transition: letter-spacing .5s, filter .5s; }
+  .graj:hover span, .graj:focus-visible span { letter-spacing: .6em; filter: drop-shadow(0 0 22px rgba(247,196,58,.35)); }
+  .graj:focus-visible { outline: none; }
+  .pytajnik { margin-top: 18px; width: 44px; height: 44px; padding: 0; border: 0; background: none; font: 200 22px/1 var(--sans); cursor: pointer; touch-action: manipulation; transition: transform .5s; background-image: linear-gradient(90deg, #ffffff, #bcd9ff, #ffffff, #9fc8ff, #ffffff); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; animation: wplyn 1.2s cubic-bezier(.2,.7,.2,1) forwards, mien 6s linear infinite; } /* mieni się biało-błękitnie; wplyn musi zostać, inaczej przycisk zostaje niewidoczny (opacity 0) */
+  .pytajnik:hover, .pytajnik:focus-visible { color: var(--tekst); outline: none; }
+  .wejscie.rozwiniety .pytajnik { transform: rotate(180deg); opacity: .55; }
+  @keyframes mien { from { background-position: 0% 50%; } to { background-position: 100% 50%; } }
+  @media (prefers-reduced-motion: reduce) { .wejscie > *, .tytul .ch i { animation: none; opacity: 1; transform: none; filter: none; } .tytul .ch i::before, .tytul .ch i::after, .tytul .ch s::before, .tytul .ch s::after, .tytul .ch u::before, .tytul .ch u::after, .tytul .ch b::before, .tytul .ch b::after, .graj span { animation: none; } .szczegoly, .graj, .pytajnik { transition: none; } }
+  .karta { width: 100%; max-width: 520px; padding: 36px 32px 30px; border: 1px solid rgba(157,163,172,.18); border-radius: 18px; background: linear-gradient(180deg, rgba(21,23,29,.92), rgba(10,11,15,.92)); box-shadow: 0 30px 80px rgba(0,0,0,.5); }
+  .karta h1 { margin: 0 0 6px; font-size: 40px; font-weight: 300; letter-spacing: .02em; }
+  .karta h2 { margin: 0 0 16px; font-size: 24px; font-weight: 400; }
+  .karta .pod { margin: 0 0 22px; color: var(--tekst-2); font-size: 15px; line-height: 1.5; }
+  .karta p { margin: 0 0 10px; font-size: 15px; line-height: 1.55; color: var(--tekst); }
+  .karta p.c { color: var(--tekst-2); }
+  .karta .zasady { margin: 18px 0 26px; padding: 0; list-style: none; display: grid; gap: 10px; }
+  .karta .zasady li { display: grid; grid-template-columns: 22px 1fr; gap: 12px; align-items: start; font-size: 15px; line-height: 1.5; color: var(--tekst); }
+  .karta .zasady i { display: block; width: 14px; height: 14px; border-radius: 50%; margin-top: 4px; }
+  .k-szary { background: var(--szary); } .k-zolty { background: var(--zolty); } .k-niebieski { background: var(--niebieski); } .k-czerwony { background: var(--czerwony); } .k-bit { background: transparent; box-shadow: 0 0 0 1px var(--szary) inset; }
+  .karta .rzad { display: flex; gap: 14px; align-items: center; justify-content: space-between; margin-top: 8px; }
+  .karta .klawisze { margin: 22px 0 24px; }
+  .karta .klawisze li { grid-template-columns: 76px 1fr; align-items: center; }
+  .karta .klawisze kbd { font-family: var(--mono); font-size: 13px; color: var(--tekst); border: 1px solid rgba(255,255,255,.25); border-radius: 4px; padding: 2px 7px; display: inline-block; text-align: center; }
+  .karta .klawisze span kbd { margin-left: 2px; }
+  .karta .boty { margin: 0 0 14px; font-size: 15px; color: var(--tekst-2); }
+  body.single .tylko-multi, body.single #bSpacja { display: none; } /* single: gracz nie nawołuje */
+  .karta .pod b { color: var(--tekst); font-weight: 500; }
+  .licznik { display: flex; align-items: center; gap: 10px; }
+  .licznik b { min-width: 30px; text-align: center; font: 500 18px var(--mono); color: var(--tekst); }
+  .licznik .guzik { min-width: 48px; padding: 0; font-size: 20px; line-height: 1; }
+  .licznik .guzik:disabled { opacity: .35; cursor: default; }
+  .guzik { min-height: 48px; padding: 0 26px; border-radius: 12px; border: 1px solid rgba(214,218,224,.4); background: var(--tekst); color: var(--tlo); font: 500 15px/1 var(--sans); letter-spacing: .04em; cursor: pointer; touch-action: manipulation; }
+  .guzik.cichy { background: transparent; color: var(--tekst); border-color: rgba(157,163,172,.35); }
+  .guzik:focus-visible { outline: 2px solid var(--niebieski); outline-offset: 2px; }
+  .skrot { font-size: 15px; line-height: 1.6; color: #a6adbb; margin: 16px 0 0; }
+  .skrot kbd { font-family: var(--mono); font-size: 13px; color: var(--tekst); border: 1px solid rgba(255,255,255,.25); border-radius: 4px; padding: 1px 6px; }
+  .guzik#graj { width: 100%; min-height: 52px; }
+  table.stat { width: 100%; border-collapse: collapse; margin: 6px 0 18px; font-size: 15px; }
+  table.stat td { padding: 9px 0; border-bottom: 1px solid rgba(157,163,172,.14); }
+  table.stat td:last-child { text-align: right; font-family: var(--mono); color: var(--tekst); }
+  table.stat td:first-child { color: var(--tekst-2); }
+  #ksiega { font-family: var(--mono); font-size: 13px; color: var(--tekst-2); min-height: 20px; }
+  .vis { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  @media (max-width: 480px) { .karta { padding: 28px 22px 24px; } .karta h1 { font-size: 34px; } }
+  @media (prefers-reduced-motion: reduce) { .naklad, #pasek .tor i, #epoka { transition: none; } }
+</style>
+</head>
+<body>
+<canvas id="scena" aria-label="Plansza gry Komet" role="img"></canvas>
+
+<header id="gora" class="strefa">
+  <div class="marka logo tytul" aria-label="Komet"><span class="ch" style="--i:0"><i data-c="K"><s data-c="K"><u data-c="K"><b data-c="K">K</b></u></s></i></span><span class="ch" style="--i:1"><i data-c="O"><s data-c="O"><u data-c="O"><b data-c="O">O</b></u></s></i></span><span class="ch" style="--i:2"><i data-c="M"><s data-c="M"><u data-c="M"><b data-c="M">M</b></u></s></i></span><span class="ch" style="--i:3"><i data-c="E"><s data-c="E"><u data-c="E"><b data-c="E">E</b></u></s></i></span><span class="ch" style="--i:4"><i data-c="T"><s data-c="T"><u data-c="T"><b data-c="T">T</b></u></s></i></span></div>
+  <div id="srodek"><div id="swit" aria-label="Droga do świtu"><i class="w1"></i><i class="w2"></i><i class="w3"></i><i class="glowna"></i></div></div>
+  <div id="prawy"><div id="sprintTor" aria-label="Zapas sprintu"><i id="sprint"></i></div></div>
+</header>
+<div id="epoka" aria-live="polite"></div>
+
+<footer id="dol" class="strefa">
+  <div id="komunikat" aria-live="polite"></div>
+  <button id="pytajnik2" type="button" aria-label="Klawisze" aria-expanded="false" aria-controls="podpowiedz"><span>?</span></button>
+  <div id="podpowiedz"><kbd>WASD</kbd> move · <kbd>SHIFT</kbd> run · <span class="tylko-multi"><kbd>SPACE</kbd> call · </span><kbd>E</kbd> connect</div>
+  <div id="dotyk">
+    <div id="strefa" aria-label="Strefa gałki ruchu"></div>
+    <div id="galka" aria-hidden="true"><i></i></div>
+    <button class="przycisk" id="bShift" type="button" aria-label="Run; in a pair: disconnect">run</button>
+    <button class="przycisk" id="bSpacja" type="button" aria-label="Call">call</button>
+    <button class="przycisk" id="bE" type="button" aria-label="Connect">connect</button>
+  </div>
+</footer>
+
+<div id="start" class="naklad widac" role="dialog" aria-labelledby="tytul">
+  <div class="wejscie">
+    <h1 id="tytul" class="tytul" aria-label="Komet"><span class="ch" style="--i:0"><i data-c="K"><s data-c="K"><u data-c="K"><b data-c="K">K</b></u></s></i></span><span class="ch" style="--i:1"><i data-c="O"><s data-c="O"><u data-c="O"><b data-c="O">O</b></u></s></i></span><span class="ch" style="--i:2"><i data-c="M"><s data-c="M"><u data-c="M"><b data-c="M">M</b></u></s></i></span><span class="ch" style="--i:3"><i data-c="E"><s data-c="E"><u data-c="E"><b data-c="E">E</b></u></s></i></span><span class="ch" style="--i:4"><i data-c="T"><s data-c="T"><u data-c="T"><b data-c="T">T</b></u></s></i></span></h1>
+    <div class="szczegoly" id="szczegoly"><div>
+      <div class="nauka" id="nauka" aria-label="Nauka gry: wycinki z gry"></div>
+      <div class="boty"><span class="etykieta wilk" aria-label="Wilki"></span><div class="licznik"><button class="krok" id="botyMinus" type="button" aria-label="Mniej botów">−</button><b id="botyLiczba">5</b><button class="krok" id="botyPlus" type="button" aria-label="Więcej botów">+</button></div></div>
+    </div></div>
+    <button class="graj" id="graj" type="button" style="--i:2"><span>Play</span></button>
+    <button class="pytajnik" id="pytajnik" type="button" style="--i:3" aria-expanded="false" aria-controls="szczegoly" aria-label="Klawisze i boty">?</button>
+  </div>
+</div>
+
+<div id="koniec" class="naklad" role="dialog" aria-labelledby="tytul3">
+  <div class="karta">
+    <h2 id="tytul3">Koniec rundy</h2>
+    <p class="pod" id="koniecPod"></p>
+    <p class="pod">Zapalone „1” na koniec: <b id="wynikJasne">0%</b> planszy. Najwięcej naraz: <b id="wynikRekord">0%</b>.</p>
+    <table class="stat" id="wynikTabela"></table>
+    <div class="rzad"><button class="guzik" id="jeszcze" type="button">Jeszcze raz</button></div>
+  </div>
+</div>
+<div id="podsumowanie" class="naklad" role="dialog" aria-labelledby="tytul2">
+  <div class="karta">
+    <h2 id="tytul2">Podsumowanie</h2>
+    <table class="stat" id="tabela"></table>
+    <p class="c" id="pole-opis"></p>
+    <div id="ksiega"></div>
+    <div class="rzad" style="margin-top:18px"><button class="guzik cichy" id="zamknij" type="button">Wróć do gry</button><span class="skrot"><kbd>Tab</kbd> zamyka</span></div>
+  </div>
+</div>
+
+<script src="silnik.js"></script>
+<script src="ksztalty.js"></script>
+<script src="boty.js"></script>
+<script src="dzwiek.js"></script>
+<script src="nauka.js"></script>
+<script src="klient.js"></script>
+</body>
+</html>
